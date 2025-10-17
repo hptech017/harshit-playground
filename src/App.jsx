@@ -1,15 +1,11 @@
-
 import React from 'react'
-import HarshitPage from './HarshitPage'
-import LiquidityComponent from './components/LiquidityProvider'
-import UpDownGame from './components/UpDownGame'
+import TradingSimulator from './components/TradingSimulator'
+import PhoneAuth from './components/PhoneAuth'
 
 const App = () => {
   return (
     <div>
-      <HarshitPage />
-      {/* <UpDownGame/> */}
-      {/* <LiquidityComponent/> */}
+ <PhoneAuth/>
     </div>
   )
 }
