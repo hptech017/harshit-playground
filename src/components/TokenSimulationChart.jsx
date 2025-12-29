@@ -48,23 +48,63 @@ const TokenCandleSimulationTV = ({
   initialPrice = 0.3,
   updateIntervalMs = 1000,
   maxCandles = 60,
-  exchangeName = "SIMULATED"
+  exchangeName = "SIMULATED",
 }) => {
-  const [candles, setCandles] = useState(() => [
-    {
-      time: Date.now(),
-      open: initialPrice,
-      high: initialPrice,
-      low: initialPrice,
-      close: initialPrice,
-    },
-  ]);
+  // Helper: prebuild N candles so chart doesn't start empty
+  function buildInitialCandles(count, seedPrice) {
+    const arr = [];
+    const now = Date.now();
+    // first candle
+    arr.push({
+      time: now - (count - 1) * updateIntervalMs,
+      open: seedPrice,
+      high: seedPrice,
+      low: seedPrice,
+      close: seedPrice,
+    });
+
+    for (let i = 1; i < count; i++) {
+      const last = arr[arr.length - 1];
+      const previousClose = last.close;
+
+      const close = generateNextPrice(previousClose, minPrice, maxPrice, 0.02);
+
+      const baseHigh = Math.max(previousClose, close);
+      const baseLow = Math.min(previousClose, close);
+
+      const extraHigh = (Math.random() * (maxPrice - minPrice)) * 0.003;
+      const extraLow = (Math.random() * (maxPrice - minPrice)) * 0.003;
+
+      const high = clamp(baseHigh + extraHigh, minPrice, maxPrice);
+      const low = clamp(baseLow - extraLow, minPrice, maxPrice);
+
+      arr.push({
+        time: now - (count - 1 - i) * updateIntervalMs,
+        open: previousClose,
+        high: Number(high.toFixed(4)),
+        low: Number(low.toFixed(4)),
+        close: Number(close.toFixed(4)),
+      });
+    }
+
+    return arr;
+  }
+
+  const [candles, setCandles] = useState(() => buildInitialCandles(maxCandles, initialPrice));
 
   const [orderBook, setOrderBook] = useState(() =>
-    generateOrderBook(initialPrice)
+    generateOrderBook((buildInitialCandles(maxCandles, initialPrice).slice(-1)[0] || { close: initialPrice }).close)
   );
 
   const currentPrice = candles[candles.length - 1]?.close ?? initialPrice;
+
+  useEffect(() => {
+    // if props like maxCandles, initialPrice change, re-seed the candles
+    // (optional) you can guard this so it only runs when you want to reset
+    // For now we'll only rebuild orderbook on mount here.
+    setOrderBook(generateOrderBook(currentPrice));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -73,21 +113,14 @@ const TokenCandleSimulationTV = ({
         const previousClose = last.close;
 
         // naya close price generate karo
-        const close = generateNextPrice(
-          previousClose,
-          minPrice,
-          maxPrice,
-          0.02 // 2% of range max movement
-        );
+        const close = generateNextPrice(previousClose, minPrice, maxPrice, 0.02); // 2% of range max movement
 
         // high/low ko open & close ke around thoda move kara dete hain
         const baseHigh = Math.max(previousClose, close);
         const baseLow = Math.min(previousClose, close);
 
-        const extraHigh =
-          (Math.random() * (maxPrice - minPrice)) * 0.003; // 0–0.3% extra
-        const extraLow =
-          (Math.random() * (maxPrice - minPrice)) * 0.003; // 0–0.3% extra
+        const extraHigh = (Math.random() * (maxPrice - minPrice)) * 0.003; // 0–0.3% extra
+        const extraLow = (Math.random() * (maxPrice - minPrice)) * 0.003; // 0–0.3% extra
 
         const high = clamp(baseHigh + extraHigh, minPrice, maxPrice);
         const low = clamp(baseLow - extraLow, minPrice, maxPrice);
@@ -152,8 +185,7 @@ const TokenCandleSimulationTV = ({
     const bodyWidth = Math.max(slotWidth * 0.6, 3);
 
     return candles.map((candle, index) => {
-      const xCenter =
-        paddingLeft + slotWidth * index + slotWidth / 2;
+      const xCenter = paddingLeft + slotWidth * index + slotWidth / 2;
 
       const yOpen = scaleY(candle.open);
       const yClose = scaleY(candle.close);
@@ -176,16 +208,7 @@ const TokenCandleSimulationTV = ({
         isBullish,
       };
     });
-  }, [
-    candles,
-    chartWidth,
-    chartHeight,
-    paddingLeft,
-    paddingRight,
-    paddingTop,
-    paddingBottom,
-    scaleY,
-  ]);
+  }, [candles, chartWidth, chartHeight, paddingLeft, paddingRight, paddingTop, paddingBottom, scaleY]);
 
   const lastCandle = candles[candles.length - 1];
 
@@ -214,8 +237,7 @@ const TokenCandleSimulationTV = ({
         color: "#e5e7eb",
         padding: "16px",
         borderRadius: "16px",
-        fontFamily:
-          "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         display: "flex",
         gap: "16px",
         border: "1px solid #1f2937",
@@ -245,80 +267,38 @@ const TokenCandleSimulationTV = ({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>
-              {tokenSymbol}/USDT
-            </span>
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>
-              {exchangeName}
-            </span>
-            <span style={{ fontSize: 11, color: "#6b7280" }}>
-              Simulated
-            </span>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>{tokenSymbol}/USDT</span>
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>{exchangeName}</span>
+            <span style={{ fontSize: 11, color: "#6b7280" }}>Simulated</span>
           </div>
 
           {lastCandle && (
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                fontSize: 11,
-                color: "#9ca3af",
-              }}
-            >
+            <div style={{ display: "flex", gap: "10px", fontSize: 11, color: "#9ca3af" }}>
               <span>
-                O{" "}
-                <strong style={{ color: "#e5e7eb" }}>
-                  {lastCandle.open.toFixed(4)}
-                </strong>
+                O <strong style={{ color: "#e5e7eb" }}>{lastCandle.open.toFixed(4)}</strong>
               </span>
               <span>
-                H{" "}
-                <strong style={{ color: "#e5e7eb" }}>
-                  {lastCandle.high.toFixed(4)}
-                </strong>
+                H <strong style={{ color: "#e5e7eb" }}>{lastCandle.high.toFixed(4)}</strong>
               </span>
               <span>
-                L{" "}
-                <strong style={{ color: "#e5e7eb" }}>
-                  {lastCandle.low.toFixed(4)}
-                </strong>
+                L <strong style={{ color: "#e5e7eb" }}>{lastCandle.low.toFixed(4)}</strong>
               </span>
               <span>
-                C{" "}
-                <strong
-                  style={{
-                    color:
-                      lastCandle.close >= lastCandle.open
-                        ? "#22c55e"
-                        : "#f97373",
-                  }}
-                >
-                  {lastCandle.close.toFixed(4)}
-                </strong>
+                C <strong style={{ color: lastCandle.close >= lastCandle.open ? "#22c55e" : "#f97373" }}>{lastCandle.close.toFixed(4)}</strong>
               </span>
             </div>
           )}
         </div>
 
         {/* Timeframe buttons bar (just UI) */}
-        <div
-          style={{
-            display: "flex",
-            gap: "6px",
-            padding: "6px 10px",
-            borderBottom: "1px solid #111827",
-            fontSize: 11,
-            color: "#9ca3af",
-          }}
-        >
+        <div style={{ display: "flex", gap: "6px", padding: "6px 10px", borderBottom: "1px solid #111827", fontSize: 11, color: "#9ca3af" }}>
           {["1s", "5s", "15s", "1m", "5m", "15m", "1h"].map((t, idx) => (
             <button
               key={t}
               style={{
                 padding: "2px 8px",
                 borderRadius: "6px",
-                border:
-                  idx === 0 ? "1px solid #4b5563" : "1px solid transparent",
+                border: idx === 0 ? "1px solid #4b5563" : "1px solid transparent",
                 background: idx === 0 ? "#111827" : "transparent",
                 color: "#e5e7eb",
                 cursor: "default",
@@ -331,36 +311,14 @@ const TokenCandleSimulationTV = ({
 
         {/* Main candlestick chart */}
         <div style={{ padding: "4px 4px 8px 4px", flex: 1 }}>
-          <svg
-            width="100%"
-            height={chartHeight}
-            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            preserveAspectRatio="none"
-            style={{
-              background: "#020617",
-              borderRadius: "8px",
-            }}
-          >
+          <svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" style={{ background: "#020617", borderRadius: "8px" }}>
             {/* Grid + y-axis prices */}
             {yTicks.map((tick, idx) => (
               <g key={idx}>
                 {/* Horizontal grid line */}
-                <line
-                  x1={paddingLeft}
-                  x2={chartWidth - paddingRight}
-                  y1={tick.y}
-                  y2={tick.y}
-                  stroke="#111827"
-                  strokeWidth="1"
-                />
+                <line x1={paddingLeft} x2={chartWidth - paddingRight} y1={tick.y} y2={tick.y} stroke="#111827" strokeWidth="1" />
                 {/* Price text left */}
-                <text
-                  x={paddingLeft - 4}
-                  y={tick.y + 3}
-                  textAnchor="end"
-                  fontSize="10"
-                  fill="#6b7280"
-                >
+                <text x={paddingLeft - 4} y={tick.y + 3} textAnchor="end" fontSize="10" fill="#6b7280">
                   {tick.price.toFixed(4)}
                 </text>
               </g>
@@ -370,119 +328,34 @@ const TokenCandleSimulationTV = ({
             {candleVisuals.map((c, idx) => (
               <g key={idx}>
                 {/* Wick */}
-                <line
-                  x1={c.xCenter}
-                  x2={c.xCenter}
-                  y1={c.yHigh}
-                  y2={c.yLow}
-                  stroke={c.isBullish ? "#22c55e" : "#f97373"}
-                  strokeWidth="1"
-                />
+                <line x1={c.xCenter} x2={c.xCenter} y1={c.yHigh} y2={c.yLow} stroke={c.isBullish ? "#22c55e" : "#f97373"} strokeWidth="1" />
                 {/* Body */}
-                <rect
-                  x={c.bodyX}
-                  y={c.bodyY}
-                  width={c.bodyWidth}
-                  height={c.bodyHeight}
-                  fill={c.isBullish ? "#22c55e" : "#f97373"}
-                />
+                <rect x={c.bodyX} y={c.bodyY} width={c.bodyWidth} height={c.bodyHeight} fill={c.isBullish ? "#22c55e" : "#f97373"} />
               </g>
             ))}
 
             {/* Last price line + label (TradingView style) */}
-            <line
-              x1={paddingLeft}
-              x2={chartWidth - paddingRight}
-              y1={lastPriceY}
-              y2={lastPriceY}
-              stroke="#4b5563"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
+            <line x1={paddingLeft} x2={chartWidth - paddingRight} y1={lastPriceY} y2={lastPriceY} stroke="#4b5563" strokeWidth="1" strokeDasharray="4 4" />
             {/* Right side price label box */}
-            <rect
-              x={chartWidth - paddingRight + 4}
-              y={lastPriceY - 9}
-              width="60"
-              height="18"
-              rx="4"
-              fill="#111827"
-              stroke="#4b5563"
-              strokeWidth="1"
-            />
-            <text
-              x={chartWidth - paddingRight + 34}
-              y={lastPriceY + 4}
-              textAnchor="middle"
-              fontSize="11"
-              fill="#e5e7eb"
-            >
-              {lastPriceStr}
-            </text>
+            <rect x={chartWidth - paddingRight + 4} y={lastPriceY - 9} width="60" height="18" rx="4" fill="#111827" stroke="#4b5563" strokeWidth="1" />
+            <text x={chartWidth - paddingRight + 34} y={lastPriceY + 4} textAnchor="middle" fontSize="11" fill="#e5e7eb">{lastPriceStr}</text>
           </svg>
         </div>
       </div>
 
       {/* Right: Order Book (same as before) */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: "260px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "14px",
-            fontWeight: 600,
-            marginBottom: "4px",
-          }}
-        >
-          Order Book
-        </div>
+      <div style={{ flex: 1, minWidth: "260px", display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ fontSize: "14px", fontWeight: 600, marginBottom: "4px" }}>Order Book</div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "8px",
-            fontSize: "12px",
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
           {/* Asks */}
-          <div
-            style={{
-              background: "#020617",
-              borderRadius: "12px",
-              padding: "8px",
-              border: "1px solid #111827",
-              maxHeight: "260px",
-              overflow: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "4px",
-                fontWeight: 600,
-                color: "#f87171",
-              }}
-            >
+          <div style={{ background: "#020617", borderRadius: "12px", padding: "8px", border: "1px solid #111827", maxHeight: "260px", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontWeight: 600, color: "#f87171" }}>
               <span>Ask Price</span>
               <span>Amount</span>
             </div>
             {orderBook.asks.map((ask, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "2px 0",
-                }}
-              >
+              <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
                 <span>{ask.price.toFixed(4)}</span>
                 <span>{ask.amount.toFixed(2)}</span>
               </div>
@@ -490,37 +363,13 @@ const TokenCandleSimulationTV = ({
           </div>
 
           {/* Bids */}
-          <div
-            style={{
-              background: "#020617",
-              borderRadius: "12px",
-              padding: "8px",
-              border: "1px solid #111827",
-              maxHeight: "260px",
-              overflow: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "4px",
-                fontWeight: 600,
-                color: "#4ade80",
-              }}
-            >
+          <div style={{ background: "#020617", borderRadius: "12px", padding: "8px", border: "1px solid #111827", maxHeight: "260px", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontWeight: 600, color: "#4ade80" }}>
               <span>Bid Price</span>
               <span>Amount</span>
             </div>
             {orderBook.bids.map((bid, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "2px 0",
-                }}
-              >
+              <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
                 <span>{bid.price.toFixed(4)}</span>
                 <span>{bid.amount.toFixed(2)}</span>
               </div>
@@ -528,9 +377,7 @@ const TokenCandleSimulationTV = ({
           </div>
         </div>
 
-        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-          Front-end only simulated candlestick & order book. No real trades.
-        </div>
+        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>Front-end only simulated candlestick & order book. No real trades.</div>
       </div>
     </div>
   );

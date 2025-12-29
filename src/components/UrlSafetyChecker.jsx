@@ -616,7 +616,7 @@ const UrlSafetyChecker = () => {
                 }}
               >
                 Made & Built by{" "}
-                <span style={{ fontWeight: 600 }}>Tanmay Pandey</span>
+                <span style={{ fontWeight: 600 }}>TS^2</span>
               </div>
             </div>Koi bhi
 
